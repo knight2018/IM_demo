@@ -75,7 +75,8 @@ def test_reply_resume_model_and_effort(tmp_path: Path) -> None:
         if m.get('method') == 'turn/start':
             assert m['params']['model'] == 'gpt-6.1-sol'
             assert m['params']['effort'] == 'medium'
-            assert m['params']['sandboxPolicy'] == {'type': 'readOnly', 'networkAccess': False}
+            assert m['params']['sandboxPolicy'] == {'type': 'dangerFullAccess'}
+            assert m['params']['approvalPolicy'] == 'never'
 
 
 def test_users_have_independent_threads(tmp_path: Path) -> None:
@@ -155,7 +156,7 @@ def test_same_conversation_serialized(tmp_path: Path) -> None:
     assert maximum == 1 and sorted(results) == ['0', '1']
 
 
-def test_file_read_enabled_for_new_and_resumed_threads(tmp_path: Path) -> None:
+def test_full_execution_enabled_for_new_and_resumed_threads(tmp_path: Path) -> None:
     sent: list[dict[str, object]] = []
     bridge = client(tmp_path)
     with patch('core.codex.connect', side_effect=lambda *a, **k: FakeSocket(sent)):
@@ -166,11 +167,34 @@ def test_file_read_enabled_for_new_and_resumed_threads(tmp_path: Path) -> None:
     for m in threads:
         params = m['params']
         assert params['config']['features.shell_tool'] is True
-        assert params['sandbox'] == 'read-only'
-        assert params['approvalPolicy'] == 'on-request'
+        assert params['sandbox'] == 'danger-full-access'
+        assert params['approvalPolicy'] == 'never'
         assert params['cwd'] == str(bridge.workspace)
-        assert '使用可用工具读取' in params['developerInstructions']
-        assert '不得修改、创建、删除' in params['developerInstructions']
+        assert '使用工具读写文件' in params['developerInstructions']
+        assert '完整本机执行权限' in params['developerInstructions']
+        assert params['config']['web_search'] == 'live'
+        assert 'features.apps' not in params['config']
+        assert 'features.multi_agent' not in params['config']
     for m in sent:
         if m.get('method') == 'turn/start':
-            assert m['params']['sandboxPolicy'] == {'type': 'readOnly', 'networkAccess': False}
+            assert m['params']['sandboxPolicy'] == {'type': 'dangerFullAccess'}
+            assert m['params']['approvalPolicy'] == 'never'
+
+
+def test_each_turn_refreshes_instructions_for_loaded_legacy_thread(tmp_path: Path) -> None:
+    sent: list[dict[str, object]] = []
+    bridge = client(tmp_path)
+    with patch('core.codex.connect', side_effect=lambda *a, **k: FakeSocket(sent)):
+        bridge.reply({'conversation_key': 'legacy', 'text': '创建文件'})
+        bridge.reply({'conversation_key': 'legacy', 'text': '修改文件'})
+    for index, item in enumerate(sent):
+        if item.get('method') == 'initialize':
+            assert item['params']['capabilities']['experimentalApi'] is True
+        if item.get('method') == 'turn/start':
+            injection = sent[index-1]
+            assert injection['method'] == 'thread/inject_items'
+            assert injection['params']['threadId'] == item['params']['threadId']
+            policy = injection['params']['items'][0]
+            assert policy['role'] == 'developer'
+            assert '明确撤销此前本桥接开发者指令中的只读限制' in policy['content'][0]['text']
+            assert '完整本机执行权限' in policy['content'][0]['text']

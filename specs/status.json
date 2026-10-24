@@ -13,8 +13,8 @@
     }
   },
   "SPEC-002": {
-    "status": "completed",
-    "spec": "completed/002-codex-file-read.md",
+    "status": "discarded",
+    "spec": "discarded/002-codex-file-read.md",
     "tests": [
       "tests/test_codex.py"
     ],
@@ -23,7 +23,9 @@
       "real_read": "new and resumed Codex thread read changed random markers successfully",
       "deployed_gateway": "read desktop file outside project successfully",
       "limitation": "Windows denied read of a file in system temp; no permission escalation applied"
-    }
+    },
+    "superseded_by": "SPEC-004",
+    "reason": "用户明确改为个人 Codex 完整执行权限，保留原只读实现历史"
   },
   "SPEC-003": {
     "status": "completed",
@@ -39,6 +41,25 @@
       "local_commands": "gateway unavailable and worker saturated tests passed",
       "auto_fast_path": "zero classification calls for exact standalone greetings; context and failures covered",
       "runtime": "Gateway healthy; Feishu connected; graceful deployment complete"
+    }
+  },
+  "SPEC-004": {
+    "status": "completed",
+    "spec": "completed/004-personal-codex-full-access-portfolio.md",
+    "tests": [
+      "tests/test_codex.py",
+      "tests/test_gateway.py"
+    ],
+    "supersedes": [
+      "SPEC-002"
+    ],
+    "validation": {
+      "full_regression": "83 passed; 2 third-party deprecation warnings",
+      "legacy_thread": "Explicit developer policy update via thread/inject_items verified in existing read-only thread",
+      "real_execution": "Read input; create and run Python script; update/read/delete scratch file; HTTPS 200; persisted output verified",
+      "deployment": "Gateway-created file verified; Feishu connected",
+      "related_fix": "Close Gateway SQLite connections explicitly; regression covers Windows file handle release",
+      "readme": "Portfolio-oriented README rewritten; no personal absolute paths"
     }
   }
 }

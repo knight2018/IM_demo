@@ -4,6 +4,7 @@ import hashlib
 import json
 import sqlite3
 import threading
+from contextlib import closing
 from collections.abc import Callable
 from pathlib import Path
 from core.dispatcher import HandlerRegistry
@@ -20,7 +21,7 @@ class Gateway:
         self._guard = threading.Lock()
         self._locks: dict[str, threading.Lock] = {}
         path.parent.mkdir(parents=True, exist_ok=True)
-        with sqlite3.connect(path) as db:
+        with closing(sqlite3.connect(path)) as db, db:
             db.execute('CREATE TABLE IF NOT EXISTS requests (id TEXT PRIMARY KEY, payload TEXT NOT NULL, terminal TEXT)')
 
     @staticmethod
@@ -34,7 +35,7 @@ class Gateway:
         with self._guard:
             lock = self._locks.setdefault(key, threading.Lock())
         with lock:
-            with sqlite3.connect(self.path) as db:
+            with closing(sqlite3.connect(self.path)) as db, db:
                 row = db.execute('SELECT payload,terminal FROM requests WHERE id=?', (key,)).fetchone()
                 if row and row[0] != payload:
                     raise RequestConflict('相同消息编号对应不同内容')
@@ -58,6 +59,6 @@ class Gateway:
                 # 不把模型接口诊断、凭据或内部路径发送给桥接客户端。
                 print(f'[gateway] request={key} error_type={type(exc).__name__}', flush=True)
                 terminal = ReplyEvent(type='error', request_id=key, text='本次处理失败，通道和模型保持不变，请检查网关日志。')
-            with sqlite3.connect(self.path) as db:
+            with closing(sqlite3.connect(self.path)) as db, db:
                 db.execute('UPDATE requests SET terminal=? WHERE id=?', (terminal.model_dump_json(), key))
             emit(terminal)

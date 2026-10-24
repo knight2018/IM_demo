@@ -328,3 +328,24 @@ def test_capacity_rejects_extra_generation(service) -> None:
         server.shutdown()
         server.server_close()
         serving.join(3)
+
+
+def test_gateway_closes_database_connections(tmp_path: Path) -> None:
+    connections = []
+    real_connect = sqlite3.connect
+    def connect(*args, **kwargs):
+        connection = real_connect(*args, **kwargs)
+        connections.append(connection)
+        return connection
+    registry = HandlerRegistry()
+    registry.register(FakeHandler(), default=True)
+    try:
+        with patch('gateway.service.sqlite3.connect', side_effect=connect):
+            service = Gateway(registry, tmp_path/'close.sqlite3')
+            service.reply(message(), lambda event: None)
+        assert len(connections) == 3
+        for connection in connections:
+            with pytest.raises(sqlite3.ProgrammingError, match='closed'):
+                connection.execute('SELECT 1')
+    finally:
+        registry.shutdown()
