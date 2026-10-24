@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+.env
+.env.*
+!.env.example
+.agently/
+data/
+.pytest_cache/
+.venv/
+venv/
+*.log
+*.sqlite3
+*.sqlite3-*
+*.db
+.vscode/
+.idea/
