@@ -8,6 +8,7 @@ from .base import CommandHandler
 class PingHandler(CommandHandler):
     """链路自检：确认机器人在线且分发链路可用。"""
 
+    local_only = True
     name = "ping"
     description = "/ping 检测机器人是否在线"
     priority = 100
@@ -22,6 +23,7 @@ class PingHandler(CommandHandler):
 class HelpHandler(CommandHandler):
     """列出当前注册的所有功能，方便知道有哪些能力。"""
 
+    local_only = True
     name = "help"
     description = "/help 查看已注册的功能"
     priority = 200

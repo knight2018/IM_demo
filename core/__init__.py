@@ -1,5 +1,1 @@
-"""core 包：配置、模型、飞书通道与分发机制。"""
-
-from . import dispatcher, feishu, llm
-
-__all__ = ["dispatcher", "feishu", "llm"]
+"""核心业务包；子模块由调用方显式导入，不初始化平台客户端。"""

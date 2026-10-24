@@ -7,18 +7,19 @@
 
 from core.dispatcher import HandlerRegistry
 from core import config
+from core.delivery import MessageDelivery
 
 from .builtin import HelpHandler, PingHandler
 from .chat import ChatHandler
 from .tools_agent import ToolAgentHandler
 
 
-def build_registry() -> HandlerRegistry:
+def build_registry(delivery: MessageDelivery | None = None) -> HandlerRegistry:
     """装配注册表：这里决定"谁能处理什么"。"""
-    registry = HandlerRegistry()
+    registry = HandlerRegistry(delivery)
 
     registry.register(PingHandler())
-    if config.REPLY_BACKEND == 'agently':
+    if config.REPLY_BACKEND in {'agently', 'langchain'}:
         registry.register(ToolAgentHandler())
     registry.register(HelpHandler(registry))
     # 兜底最后注册，保证只在没有更合适的 handler 时接手

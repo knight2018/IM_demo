@@ -6,6 +6,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
+from bridges.feishu import FeishuDelivery
 from core.dispatcher import HandlerRegistry, MessageContext, _seen_message_ids
 from core.lifecycle import watch_stop
 from handlers.base import BaseHandler
@@ -22,7 +23,7 @@ class BlockingHandler(BaseHandler):
 
 
 def test_shutdown_waits_until_reply_sent() -> None:
-    registry = HandlerRegistry()
+    registry = HandlerRegistry(FeishuDelivery())
     registry.register(BlockingHandler(), default=True)
     sending = threading.Event()
     release = threading.Event()

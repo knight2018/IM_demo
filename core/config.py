@@ -17,17 +17,17 @@ def _require(name: str) -> str:
 
 
 # ---------- 飞书 ----------
-FEISHU_APP_ID = _require("FEISHU_APP_ID")
-FEISHU_APP_SECRET = _require("FEISHU_APP_SECRET")
+FEISHU_APP_ID = os.getenv("FEISHU_APP_ID", "")
+FEISHU_APP_SECRET = os.getenv("FEISHU_APP_SECRET", "")
 
 # ---------- LLM（OpenAI 兼容协议） ----------
-REPLY_BACKEND = os.getenv("REPLY_BACKEND", "agently")
-if REPLY_BACKEND not in {"agently", "api", "codex", "auto"}:
-    raise RuntimeError("REPLY_BACKEND 只能为 agently、api、codex 或 auto")
+REPLY_BACKEND = os.getenv("REPLY_BACKEND", "codex")
+if REPLY_BACKEND not in {"agently", "langchain", "api", "codex", "auto"}:
+    raise RuntimeError("REPLY_BACKEND 只能为 langchain、api、codex 或 auto（兼容旧 agently 配置）")
 # 优先用 LLM_API_KEY，未设置时回落到环境变量 AGI_KEY
 LLM_API_KEY = os.getenv("LLM_API_KEY") or os.getenv("AGI_KEY")
 LLM_BASE_URL = _require("LLM_BASE_URL") if REPLY_BACKEND == "agently" else os.getenv("LLM_BASE_URL", "https://api.agicto.cn/v1/")
-LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4o-mini")
+LLM_MODEL = os.getenv("LLM_MODEL", "gemini-3.8-flash")
 
 if REPLY_BACKEND == "agently" and not LLM_API_KEY:
     raise RuntimeError("缺少模型密钥，请设置 LLM_API_KEY 或 AGI_KEY")
@@ -41,7 +41,7 @@ if os.getenv("CODEX_REASONING_EFFORT", "medium") != "medium":
 CODEX_REASONING_EFFORT: Literal['medium'] = 'medium'
 CODEX_TIMEOUT_SECONDS = float(os.getenv("CODEX_TIMEOUT_SECONDS", "180"))
 CODEX_STATE_PATH = PROJECT_ROOT / "data" / "codex-sessions.sqlite3"
-CODEX_WORKSPACE = PROJECT_ROOT / "data" / "codex-workspace"
+CODEX_WORKSPACE = Path(os.getenv("CODEX_WORKSPACE", str(PROJECT_ROOT))).expanduser().resolve()
 
 # ---------- 运行参数 ----------
 # 飞书要求事件 3 秒内响应，耗时的 Agent 调用放到线程池执行

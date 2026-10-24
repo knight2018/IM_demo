@@ -13,8 +13,12 @@ from core import config, feishu
 from core.dispatcher import MessageContext
 from core.lifecycle import start_control
 from handlers import build_registry
+from bridges.feishu import attach_gateway, FeishuDelivery
+from gateway.client import GatewayClient
+from gateway.server import load_token
 
-registry = build_registry()
+registry = attach_gateway(build_registry(FeishuDelivery()), GatewayClient(
+    'http://127.0.0.1:8787', load_token(config.PROJECT_ROOT/'data/gateway.token')))
 
 
 def build_context(data: P2ImMessageReceiveV1) -> MessageContext | None:
@@ -58,6 +62,8 @@ def on_message_receive(data: P2ImMessageReceiveV1) -> None:
 
 
 def main() -> None:
+    if not config.FEISHU_APP_ID or not config.FEISHU_APP_SECRET:
+        raise RuntimeError('飞书桥接缺少应用凭据')
     start_control(registry, config.PROJECT_ROOT/'data')
     event_handler = (
         lark.EventDispatcherHandler.builder("", "")  # 长连接模式无需 Encryption Key / Token

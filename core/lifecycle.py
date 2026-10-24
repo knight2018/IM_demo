@@ -7,10 +7,14 @@ import uuid
 from collections.abc import Callable
 from pathlib import Path
 
-from core.dispatcher import HandlerRegistry
+from typing import Protocol
 
 
-def watch_stop(request_file: Path, registry: HandlerRegistry,
+class StopTarget(Protocol):
+    def shutdown(self) -> None: ...
+
+
+def watch_stop(request_file: Path, registry: StopTarget,
                exit_process: Callable[[int], None] = os._exit,
                wait: Callable[[float], object] = threading.Event().wait) -> None:
     while not request_file.exists():
@@ -22,10 +26,10 @@ def watch_stop(request_file: Path, registry: HandlerRegistry,
     exit_process(0)
 
 
-def start_control(registry: HandlerRegistry, directory: Path) -> None:
+def start_control(registry: StopTarget, directory: Path, record_name: str = 'feishu-bot-process.json') -> None:
     directory.mkdir(parents=True, exist_ok=True)
     name = f'stop-{os.getpid()}-{uuid.uuid4().hex}.request'
     record = {'pid': os.getpid(), 'stop_file': name}
-    (directory/'feishu-bot-process.json').write_text(json.dumps(record), encoding='utf-8')
+    (directory/record_name).write_text(json.dumps(record), encoding='utf-8')
     threading.Thread(target=watch_stop, args=(directory/name, registry),
                      name='graceful-stop', daemon=True).start()

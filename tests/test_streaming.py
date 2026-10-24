@@ -10,6 +10,7 @@ from langchain_core.messages import AIMessageChunk
 
 from core.api_chat import ApiChat
 from core.codex import CodexBridge, CodexError
+from bridges.feishu import FeishuDelivery
 from core.dispatcher import HandlerRegistry, MessageContext
 from core import feishu
 from core.streaming import CardStream
@@ -111,14 +112,14 @@ class StreamingHandler(BaseHandler):
 
 
 def test_dispatcher_streams_without_duplicate_text_message() -> None:
-    registry = HandlerRegistry()
+    registry = HandlerRegistry(FeishuDelivery())
     ctx = MessageContext('id', 'chat', 'p2p', 'user', '问题', True)
-    with patch('core.dispatcher.CardStream') as stream, patch('core.feishu.send_text') as send:
+    with patch('bridges.feishu.CardStream') as stream, patch('core.feishu.send_text') as send:
         registry._run(StreamingHandler(), ctx)
         stream.return_value.update.assert_called_once_with('部分')
         stream.return_value.finish.assert_called_once_with('完整回复')
         send.assert_not_called()
-    registry._executor.shutdown(wait=True)
+    registry.shutdown()
 
 
 def test_card_api_requests_and_errors() -> None:

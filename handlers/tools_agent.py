@@ -9,6 +9,8 @@ import operator
 from datetime import datetime
 
 from .base import AgentHandler
+from core.dispatcher import MessageContext
+from langchain_core.tools import BaseTool, tool
 
 _BIN_OPS = {
     ast.Add: operator.add,
@@ -24,7 +26,7 @@ _UNARY_OPS = {ast.USub: operator.neg, ast.UAdd: operator.pos}
 KEYWORDS = ("几点", "时间", "日期", "今天", "算", "等于", "计算")
 
 
-def _safe_eval(node):
+def _safe_eval(node: ast.AST) -> int | float:
     """只允许数值常量与基本运算符，杜绝任意代码执行。"""
     if isinstance(node, ast.Expression):
         return _safe_eval(node.body)
@@ -43,15 +45,15 @@ class ToolAgentHandler(AgentHandler):
     priority = 50
 
     system_prompt = (
-        "你是飞书里的效率助手。涉及当前时间、日期或数值计算时，"
+        "你是 IM 中的效率助手。涉及当前时间、日期或数值计算时，"
         "必须调用工具获取准确结果，不要凭记忆猜测；回答保持简短。"
     )
 
-    def match(self, ctx) -> bool:
+    def match(self, ctx: MessageContext) -> bool:
         return any(keyword in ctx.text for keyword in KEYWORDS)
 
-    def register_actions(self, agent) -> None:
-        @agent.action_func
+    def tools(self) -> list[BaseTool]:
+        @tool
         def get_current_datetime() -> str:
             """获取当前本地日期时间，返回 YYYY-MM-DD HH:MM:SS 格式。
 
@@ -59,7 +61,7 @@ class ToolAgentHandler(AgentHandler):
             """
             return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-        @agent.action_func
+        @tool
         def calculate(expression: str) -> float:
             """计算数学表达式，例如 '(12 + 8) * 3' 或 '2 ** 10'。
 
@@ -68,4 +70,4 @@ class ToolAgentHandler(AgentHandler):
             """
             return _safe_eval(ast.parse(expression, mode="eval"))
 
-        agent.use_actions([get_current_datetime, calculate])
+        return [get_current_datetime, calculate]

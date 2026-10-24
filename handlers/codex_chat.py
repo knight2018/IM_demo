@@ -1,6 +1,7 @@
 """LangChain 调用链：将飞书消息转为 Codex 会话输入，返回完整回复。"""
 
 from functools import lru_cache
+import json
 
 from langchain_core.runnables import RunnableLambda
 
@@ -21,7 +22,10 @@ def prepare(ctx: MessageContext) -> ReplyInput:
     # 群内不同用户不共享私有上下文，同一用户在不同群或私聊也互相隔离。
     if not ctx.chat_id or not ctx.sender_id or ctx.sender_id == 'unknown':
         raise ValueError('缺少用户或会话标识，无法建立独立对话')
-    return {'conversation_key': f'{ctx.chat_id}:{ctx.sender_id}', 'text': ctx.text}
+    # 默认飞书账号沿用旧键，避免迁移后丢失原有模型设置和 Codex 线程。
+    key = (f'{ctx.chat_id}:{ctx.sender_id}' if ctx.channel == 'feishu' and ctx.account_id == 'default'
+           else 'im:v1:'+json.dumps([ctx.channel, ctx.account_id, ctx.chat_id, ctx.sender_id], ensure_ascii=False))
+    return {'conversation_key': key, 'text': ctx.text}
 
 
 def generate(request: ReplyInput) -> str:

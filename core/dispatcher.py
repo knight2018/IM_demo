@@ -10,11 +10,11 @@
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from . import config, feishu
-from .streaming import CardStream
+from . import config
+from .messages import MessageContext
+from .delivery import MessageDelivery, ReplyStream
 if TYPE_CHECKING:
     from handlers.base import BaseHandler
 
@@ -23,32 +23,22 @@ _seen_message_ids: set[str] = set()
 _seen_lock = threading.Lock()
 
 
-@dataclass
-class MessageContext:
-    """一次消息处理的上下文，handler 只能读这里的数据。"""
-
-    message_id: str
-    chat_id: str
-    chat_type: str
-    sender_id: str
-    text: str          # 已去掉 @占位符的用户文本
-    mentioned: bool    # 群聊中是否被 @
-    raw: dict = field(default_factory=dict)
-
-
 class HandlerRegistry:
     """handler 注册表 + 分发器。"""
 
-    def __init__(self) -> None:
-        self._handlers: list = []
-        self._default = None
+    def __init__(self, delivery: MessageDelivery | None = None) -> None:
+        self.delivery = delivery
+        self._handlers: list[BaseHandler] = []
+        self._default: BaseHandler | None = None
         self._state_lock = threading.Lock()
         self._closing = False
         self._executor = ThreadPoolExecutor(
             max_workers=config.WORKER_THREADS, thread_name_prefix="handler"
         )
 
-    def register(self, handler, *, default: bool = False) -> None:
+        self._local_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="local-command")
+
+    def register(self, handler: 'BaseHandler', *, default: bool = False) -> None:
         """注册 handler；default=True 表示作为兜底处理器。"""
         if default:
             self._default = handler
@@ -58,11 +48,11 @@ class HandlerRegistry:
         self._handlers.sort(key=lambda h: h.priority, reverse=True)
 
     @property
-    def handlers(self) -> list:
+    def handlers(self) -> list['BaseHandler']:
         """已注册的可匹配处理器（不含兜底）。"""
         return list(self._handlers)
 
-    def resolve(self, ctx: MessageContext):
+    def resolve(self, ctx: MessageContext) -> 'BaseHandler | None':
         """按优先级挑选第一个匹配的 handler。"""
         for handler in self._handlers:
             if handler.match(ctx):
@@ -76,10 +66,12 @@ class HandlerRegistry:
             if self._closing:
                 # 异常交给飞书 SDK 返回失败确认，不将未处理事件标为已处理。
                 raise RuntimeError('机器人正在平滑重启，请稍后重试消息')
+            if self.delivery is None:
+                raise RuntimeError("分发发送需要显式配置 IM 适配器")
             self._submit(ctx)
 
     def _submit(self, ctx: MessageContext) -> None:
-        if not _mark_seen(ctx.message_id):
+        if not _mark_seen(f"{ctx.channel}:{ctx.account_id}:{ctx.message_id}"):
             print(f"[skip] 重复消息 {ctx.message_id}")
             return
 
@@ -89,7 +81,8 @@ class HandlerRegistry:
             return
 
         print(f"[dispatch] handler={handler.name} text={ctx.text!r}")
-        self._executor.submit(self._run, handler, ctx)
+        executor = self._local_executor if handler.local_only else self._executor
+        executor.submit(self._run, handler, ctx)
 
     def shutdown(self) -> None:
         """先停止接收新任务，再等待已有任务生成和发送结束，不取消排队任务。"""
@@ -97,15 +90,18 @@ class HandlerRegistry:
             self._closing = True
         print('[lifecycle] draining existing replies', flush=True)
         self._executor.shutdown(wait=True, cancel_futures=False)
+        self._local_executor.shutdown(wait=True, cancel_futures=False)
         print('[lifecycle] replies drained', flush=True)
 
     def _run(self, handler: 'BaseHandler', ctx: MessageContext) -> None:
+        if self.delivery is None:
+            raise RuntimeError("未配置 IM 发送适配器")
         started = time.monotonic()
         print(f'[timing] message={ctx.message_id} stage=worker_started', flush=True)
         if handler.streaming:
-            stream: CardStream | None = None
+            stream: ReplyStream | None = None
             try:
-                stream = CardStream(ctx.chat_id)
+                stream = self.delivery.start_stream(ctx.chat_id)
                 print(f'[timing] message={ctx.message_id} stage=card_created seconds={time.monotonic()-started:.3f}', flush=True)
                 reply = handler.handle_stream(ctx, stream.update)
                 print(f'[timing] message={ctx.message_id} stage=generation_completed seconds={time.monotonic()-started:.3f}', flush=True)
@@ -125,7 +121,7 @@ class HandlerRegistry:
             print(f"[handler error] {handler.name}: {exc!r}")
             reply = f"处理失败：{exc}"
         if reply:
-            feishu.send_text(ctx.chat_id, str(reply))
+            self.delivery.send_text(ctx.chat_id, str(reply))
             print(f'[timing] message={ctx.message_id} stage=text_send_returned seconds={time.monotonic()-started:.3f}', flush=True)
 
 

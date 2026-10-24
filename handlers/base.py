@@ -2,7 +2,7 @@
 
 BaseHandler      所有处理器的协议
 CommandHandler   按命令前缀匹配（如 /ping）
-AgentHandler     持有 Agently Agent 的处理器，子类只需声明自己的工具与提示词
+AgentHandler     使用 LangChain 工具循环 的处理器，子类只需声明自己的工具与提示词
 """
 
 from abc import ABC, abstractmethod
@@ -10,6 +10,7 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from core import llm
+from langchain_core.tools import BaseTool
 if TYPE_CHECKING:
     from core.dispatcher import MessageContext
 
@@ -19,6 +20,7 @@ class BaseHandler(ABC):
     priority = 0
     description = ""
     streaming = False
+    local_only = False
 
     def handle_stream(self, ctx: 'MessageContext', on_update: Callable[[str], None]) -> str | None:
         """原有处理器保持一次性回复，只有显式启用的处理器走流式通道。"""
@@ -49,35 +51,12 @@ class CommandHandler(BaseHandler):
 
 
 class AgentHandler(BaseHandler):
-    """带 Agently Agent 的处理器。
+    """LangChain 工具助手，子类声明提示词与工具列表。"""
 
-    子类覆写 `system_prompt` 和 `register_actions()` 即可拥有自己的工具集，
-    模型配置与通道细节由基类/框架负责。
-    """
+    system_prompt = "你是 IM 中的智能助手，请用简洁清晰的中文回答。"
 
-    system_prompt = "你是飞书里的智能助手，请用简洁清晰的中文回答。"
+    def tools(self) -> list[BaseTool]:
+        return []
 
-    def __init__(self) -> None:
-        self._agent = None
-
-    @property
-    def agent(self):
-        if self._agent is None:
-            self._agent = self._build_agent()
-        return self._agent
-
-    def register_actions(self, agent) -> None:
-        """子类在这里挂载自己的工具，默认不带工具。"""
-
-    def _build_agent(self):
-        agent = llm.create_agent()
-        self.register_actions(agent)
-        return agent
-
-    def handle(self, ctx) -> str | None:
-        result = (
-            self.agent.instruct(self.system_prompt)
-            .input(ctx.text)
-            .start()
-        )
-        return str(result)
+    def handle(self, ctx: 'MessageContext') -> str:
+        return llm.run_agent(self.system_prompt, ctx.text, self.tools())

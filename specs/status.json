@@ -1,0 +1,44 @@
+{
+  "SPEC-001": {
+    "status": "completed",
+    "spec": "completed/001-im-gateway-langchain.md",
+    "tests": [
+      "tests/test_gateway.py"
+    ],
+    "validation": {
+      "full_regression": "64 passed, 2 third-party deprecation warnings",
+      "real_gateway_codex": "gpt-6.1-sol / medium; first snapshot 3.110s; total 5.219s; replay matched",
+      "runtime": "Gateway healthy; Feishu bridge connected; graceful stop verified",
+      "feishu_test_message_sent": false
+    }
+  },
+  "SPEC-002": {
+    "status": "completed",
+    "spec": "completed/002-codex-file-read.md",
+    "tests": [
+      "tests/test_codex.py"
+    ],
+    "validation": {
+      "full_regression": "65 passed; 2 third-party deprecation warnings",
+      "real_read": "new and resumed Codex thread read changed random markers successfully",
+      "deployed_gateway": "read desktop file outside project successfully",
+      "limitation": "Windows denied read of a file in system temp; no permission escalation applied"
+    }
+  },
+  "SPEC-003": {
+    "status": "completed",
+    "spec": "completed/003-gateway-decoupling-auto-fast-path.md",
+    "tests": [
+      "tests/test_gateway.py",
+      "tests/test_model_routing.py",
+      "tests/test_decoupling.py"
+    ],
+    "validation": {
+      "full_regression": "81 passed; 2 third-party deprecation warnings",
+      "import_isolation": "gateway health endpoint works with Feishu module and SDK imports forbidden",
+      "local_commands": "gateway unavailable and worker saturated tests passed",
+      "auto_fast_path": "zero classification calls for exact standalone greetings; context and failures covered",
+      "runtime": "Gateway healthy; Feishu connected; graceful deployment complete"
+    }
+  }
+}

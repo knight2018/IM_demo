@@ -6,6 +6,7 @@ from dataclasses import replace
 from collections.abc import Callable
 
 from core.api_chat import ApiChat
+from core.auto_route import local_difficulty
 from core.codex import CodexBridge
 from core.routing_store import Backend, ModelSettings, RoutingStore
 
@@ -29,7 +30,7 @@ class ModelRouter:
     @staticmethod
     def status(settings: ModelSettings) -> str:
         return (f'当前通道：{settings.mode}\nAPI：{settings.api_model}\n'
-                f'Codex：{settings.codex_model} / medium\n设置仅对你在当前飞书会话中生效。')
+                f'Codex：{settings.codex_model} / medium\n设置仅对你在当前 IM 会话中生效。')
 
     def _models(self, backend: Backend) -> list[str]:
         return self.api.models() if backend == 'api' else self.codex.available_models()
@@ -78,7 +79,9 @@ class ModelRouter:
             backend = settings.mode
             route_note = ''
             if backend == 'auto':
-                decision = self.api.classify(settings.api_model, text, history)
+                decision = local_difficulty(text)
+                if decision is None:
+                    decision = self.api.classify(settings.api_model, text, history)
                 backend = 'codex' if decision.difficulty == 'complex' else 'api'
                 route_note = f'auto → {backend}；{decision.reason}'
             model = settings.api_model if backend == 'api' else settings.codex_model

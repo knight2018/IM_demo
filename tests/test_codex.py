@@ -153,3 +153,24 @@ def test_same_conversation_serialized(tmp_path: Path) -> None:
     with patch.object(bridge, '_reply', side_effect=generate), ThreadPoolExecutor(max_workers=2) as pool:
         results = list(pool.map(bridge.reply, [{'conversation_key': 'same', 'text': str(i)} for i in range(2)]))
     assert maximum == 1 and sorted(results) == ['0', '1']
+
+
+def test_file_read_enabled_for_new_and_resumed_threads(tmp_path: Path) -> None:
+    sent: list[dict[str, object]] = []
+    bridge = client(tmp_path)
+    with patch('core.codex.connect', side_effect=lambda *a, **k: FakeSocket(sent)):
+        for text in ['读取文件', '再次读取']:
+            bridge.reply({'conversation_key': 'file-access', 'text': text})
+    threads = [m for m in sent if m.get('method') in {'thread/start', 'thread/resume'}]
+    assert [m['method'] for m in threads] == ['thread/start', 'thread/resume']
+    for m in threads:
+        params = m['params']
+        assert params['config']['features.shell_tool'] is True
+        assert params['sandbox'] == 'read-only'
+        assert params['approvalPolicy'] == 'on-request'
+        assert params['cwd'] == str(bridge.workspace)
+        assert '使用可用工具读取' in params['developerInstructions']
+        assert '不得修改、创建、删除' in params['developerInstructions']
+    for m in sent:
+        if m.get('method') == 'turn/start':
+            assert m['params']['sandboxPolicy'] == {'type': 'readOnly', 'networkAccess': False}

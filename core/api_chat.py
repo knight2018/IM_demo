@@ -65,7 +65,7 @@ class ApiChat:
 
     def answer(self, model: str, text: str, history: list[ChatTurn],
                on_update: Callable[[str], None] | None = None) -> str:
-        messages: list[BaseMessage] = [SystemMessage(content='你是飞书里的中文助手，请结合对话直接回答用户。不要声称执行过未提供的工具操作。')]
+        messages: list[BaseMessage] = [SystemMessage(content='你是 IM 中的中文助手，请结合对话直接回答用户。不要声称执行过未提供的工具操作。')]
         for turn in history:
             messages.extend([HumanMessage(content=turn['user']), AIMessage(content=turn['assistant'])])
         messages.append(HumanMessage(content=text))
