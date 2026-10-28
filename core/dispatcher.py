@@ -9,6 +9,7 @@
 
 import threading
 import time
+from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING
 
@@ -32,6 +33,17 @@ class HandlerRegistry:
         self._default: BaseHandler | None = None
         self._state_lock = threading.Lock()
         self._closing = False
+        self._drained = threading.Condition(self._state_lock)
+        self._queues: dict[tuple[str, str, str, str], deque] = {}
+        self._ready: deque[tuple[str, str, str, str]] = deque()
+        self._active: set[tuple[str, str, str, str]] = set()
+        self._notified: set[tuple[str, str, str, str]] = set()
+        self._waiting = 0
+        self._workers = config.WORKER_THREADS
+        self._session_limit = config.SESSION_QUEUE_LIMIT
+        self._global_limit = config.GLOBAL_QUEUE_LIMIT
+        self._notice_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="queue-notice")
+        self._notice_slots = threading.BoundedSemaphore(64)
         self._executor = ThreadPoolExecutor(
             max_workers=config.WORKER_THREADS, thread_name_prefix="handler"
         )
@@ -81,16 +93,78 @@ class HandlerRegistry:
             return
 
         print(f"[dispatch] handler={handler.name} text={ctx.text!r}")
-        executor = self._local_executor if handler.local_only else self._executor
-        executor.submit(self._run, handler, ctx)
+        if handler.local_only:
+            self._local_executor.submit(self._run, handler, ctx)
+            return
+        key = (ctx.channel, ctx.account_id, ctx.chat_id, ctx.sender_id)
+        queue = self._queues.get(key)
+        can_start = key not in self._active and not queue and len(self._active) < self._workers
+        if not can_start and ((queue is not None and len(queue) >= self._session_limit)
+                              or self._waiting >= self._global_limit):
+            self._notice(ctx, '消息未受理：等待队列已满，请稍后重新发送。')
+            return
+        if queue is None:
+            queue = self._queues[key] = deque()
+        queue.append((handler, ctx))
+        self._waiting += 1
+        if key not in self._active and len(queue) == 1:
+            self._ready.append(key)
+        if not can_start and key not in self._notified:
+            self._notified.add(key)
+            self._notice(ctx, '消息已排队，将按接收顺序处理，请勿重复发送。')
+        self._schedule()
+
+    def _notice(self, ctx: MessageContext, text: str) -> None:
+        """提示发送独立且有界，不阻塞接收回调、自检或模型任务。"""
+        if not self._notice_slots.acquire(blocking=False):
+            print('[queue] notice capacity reached', flush=True)
+            return
+        def send() -> None:
+            try:
+                assert self.delivery is not None
+                self.delivery.send_text(ctx.chat_id, text)
+            except Exception as exc:
+                print(f'[queue] notice failed: {type(exc).__name__}', flush=True)
+            finally:
+                self._notice_slots.release()
+        self._notice_executor.submit(send)
+
+    def _schedule(self) -> None:
+        """调用方持有状态锁；每个就绪会话仅提交一条任务。"""
+        while self._ready and len(self._active) < self._workers:
+            key = self._ready.popleft()
+            handler, ctx = self._queues[key].popleft()
+            self._waiting -= 1
+            self._active.add(key)
+            self._executor.submit(self._run_queued, key, handler, ctx)
+
+    def _run_queued(self, key: tuple[str, str, str, str],
+                    handler: 'BaseHandler', ctx: MessageContext) -> None:
+        try:
+            self._run(handler, ctx)
+        finally:
+            # 生成或发送异常都必须释放会话，避免后续消息永久挂起。
+            with self._drained:
+                self._active.remove(key)
+                if self._queues[key]:
+                    self._ready.append(key)
+                else:
+                    del self._queues[key]
+                    self._notified.discard(key)
+                self._schedule()
+                if not self._queues:
+                    self._drained.notify_all()
 
     def shutdown(self) -> None:
         """先停止接收新任务，再等待已有任务生成和发送结束，不取消排队任务。"""
-        with self._state_lock:
+        with self._drained:
             self._closing = True
-        print('[lifecycle] draining existing replies', flush=True)
+            print('[lifecycle] draining existing replies', flush=True)
+            # 排空期间继续调度已接受消息，不能提前关闭工作线程池。
+            self._drained.wait_for(lambda: not self._queues)
         self._executor.shutdown(wait=True, cancel_futures=False)
         self._local_executor.shutdown(wait=True, cancel_futures=False)
+        self._notice_executor.shutdown(wait=True, cancel_futures=False)
         print('[lifecycle] replies drained', flush=True)
 
     def _run(self, handler: 'BaseHandler', ctx: MessageContext) -> None:

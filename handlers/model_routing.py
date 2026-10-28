@@ -7,6 +7,9 @@ from langchain_core.runnables import RunnableLambda
 
 from core import config
 from core.api_chat import ApiChat
+from core.tavily import create_search_tool
+from core.knowledge import Embeddings, create_knowledge_tool
+from core.rerank import Reranker
 from core.dispatcher import MessageContext
 from core.model_router import ModelRouter, USAGE
 from core.routing_store import ModelSettings, RoutingStore
@@ -18,7 +21,11 @@ from handlers.codex_chat import bridge, prepare
 def router() -> ModelRouter:
     return ModelRouter(RoutingStore(config.PROJECT_ROOT/'data/model-routing.sqlite3',
         ModelSettings(config.REPLY_BACKEND, config.LLM_MODEL, config.CODEX_MODEL)),
-        ApiChat(config.LLM_BASE_URL, config.LLM_API_KEY), bridge())
+        ApiChat(config.LLM_BASE_URL, config.LLM_API_KEY,
+                search_tool=create_search_tool(config.TACILY_KEY) if config.TACILY_KEY else None,
+                knowledge_tool=create_knowledge_tool(config.KNOWLEDGE_PATH,
+                    Embeddings(config.LLM_BASE_URL, config.LLM_API_KEY, config.EMBEDDING_MODEL),
+                    Reranker(config.LLM_BASE_URL, config.LLM_API_KEY, config.RERANK_MODEL))), bridge())
 
 
 def generate(ctx: MessageContext) -> str:
@@ -56,7 +63,7 @@ class ModelCommandHandler(BaseHandler):
 
     def match(self, ctx: MessageContext) -> bool:
         words = ctx.text.strip().split()
-        return bool(words) and words[0] in {'/use_model', '/model'}
+        return bool(words) and words[0] in {'/use_model', '/model', '/tacily', '/tavily'}
 
     def handle(self, ctx: MessageContext) -> str:
         request = prepare(ctx)

@@ -50,3 +50,19 @@ LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 
 # 群聊里是否对所有消息都回复（true），还是只在被 @ 时回复（false）
 GROUP_REPLY_ALL = os.getenv("GROUP_REPLY_ALL", "false").lower() == "true"
+
+# API 通道的 Tavily 搜索密钥，沿用现有环境变量名称。
+TACILY_KEY = os.getenv("TACILY_KEY", "").strip()
+
+# 桥接等待队列容量，不包含正在执行的消息。
+SESSION_QUEUE_LIMIT = int(os.getenv("SESSION_QUEUE_LIMIT", "5"))
+GLOBAL_QUEUE_LIMIT = int(os.getenv("GLOBAL_QUEUE_LIMIT", "100"))
+if SESSION_QUEUE_LIMIT < 1 or GLOBAL_QUEUE_LIMIT < 1:
+    raise RuntimeError("消息等待队列上限必须为正整数")
+
+# 入职知识库使用与问答相同的 API 服务，向量模型固定保存于索引元数据。
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
+KNOWLEDGE_PATH = PROJECT_ROOT / "data" / "knowledge"
+
+# 知识检索在混合召回后使用独立模型重排。
+RERANK_MODEL = os.getenv("RERANK_MODEL", "qwen3-rerank")

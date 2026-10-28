@@ -14,6 +14,7 @@ USAGE = ('/use_model api|codex|auto 切换通道\n'
          '/model 查看当前选择\n/model <模型ID> 切换当前固定通道的模型\n'
          '/model api <模型ID> 或 /model codex <模型ID> 分别设置\n'
          '/model list api|codex [关键词] 查看模型目录\n'
+         '/tacily on|off 开关 API 联网搜索；/tacily 查看状态（也支持 /tavily）\n'
          'auto：简单问题使用 API，复杂问题使用 Codex；Codex 推理强度保持 medium。')
 
 
@@ -30,7 +31,8 @@ class ModelRouter:
     @staticmethod
     def status(settings: ModelSettings) -> str:
         return (f'当前通道：{settings.mode}\nAPI：{settings.api_model}\n'
-                f'Codex：{settings.codex_model} / medium\n设置仅对你在当前 IM 会话中生效。')
+                f'Codex：{settings.codex_model} / medium\n'
+                f'Tavily 搜索：{"开启" if settings.tavily_enabled else "关闭"}（仅 API 通道）\n设置仅对你在当前 IM 会话中生效。')
 
     def _models(self, backend: Backend) -> list[str]:
         return self.api.models() if backend == 'api' else self.codex.available_models()
@@ -39,6 +41,17 @@ class ModelRouter:
         args = text.strip().split()
         with self._lock(conversation):
             settings = self.store.get(conversation)
+            if args and args[0] in {'/tacily', '/tavily'}:
+                if len(args) > 2 or (len(args) == 2 and args[1] not in {'on', 'off'}):
+                    return '用法：/tacily on 开启，/tacily off 关闭，/tacily 查看状态。'
+                if len(args) == 2:
+                    if args[1] == 'on' and self.api.search_tool is None:
+                        return '未配置 TACILY_KEY，无法开启 Tavily 搜索；原设置未改变。'
+                    settings = replace(settings, tavily_enabled=args[1] == 'on')
+                    self.store.save(conversation, settings)
+                available = '已配置' if self.api.search_tool is not None else '未配置，当前不可用'
+                return (f'Tavily 搜索：{"开启" if settings.tavily_enabled else "关闭"}。'
+                        f'密钥：{available}。\n仅对你在当前会话的 API 回答生效（含 auto 选择 API）；不影响 Codex。')
             if len(args) == 1:
                 return self.status(settings)+'\n\n'+USAGE
             if args[0] == '/use_model':
@@ -86,8 +99,10 @@ class ModelRouter:
                 route_note = f'auto → {backend}；{decision.reason}'
             model = settings.api_model if backend == 'api' else settings.codex_model
             if backend == 'api':
-                reply = (self.api.answer(model, text, history) if on_update is None
-                         else self.api.answer(model, text, history, on_update=on_update))
+                # 按请求传递关闭状态，禁止修改跨会话共享的 API 实例。
+                options = {} if settings.tavily_enabled else {'search_enabled': False}
+                reply = (self.api.answer(model, text, history, **options) if on_update is None
+                         else self.api.answer(model, text, history, on_update=on_update, **options))
             else:
                 # 保持原 Codex 线程，同时补齐 API 通道的最近记录，切换后仍能理解指代。
                 prompt = text if not history else ('以下 JSON 是最近对话资料，可能与已有记录重叠；'

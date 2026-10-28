@@ -1,65 +1,143 @@
 {
-  "SPEC-001": {
-    "status": "completed",
-    "spec": "completed/001-im-gateway-langchain.md",
-    "tests": [
-      "tests/test_gateway.py"
-    ],
-    "validation": {
-      "full_regression": "64 passed, 2 third-party deprecation warnings",
-      "real_gateway_codex": "gpt-6.1-sol / medium; first snapshot 3.110s; total 5.219s; replay matched",
-      "runtime": "Gateway healthy; Feishu bridge connected; graceful stop verified",
-      "feishu_test_message_sent": false
-    }
+  "schema_version": 2,
+  "organization": "按功能模块长期维护，不按对话或开发次数新建编号",
+  "latest_recorded_validation": {
+    "result": "160 passed, 2 existing SDK warnings",
+    "seconds": 9.71,
+    "evidence": "data/pytest-rerank.log",
+    "note": "此前功能交付记录，本次仅文档整理，未重新执行功能测试"
   },
-  "SPEC-002": {
-    "status": "discarded",
-    "spec": "discarded/002-codex-file-read.md",
-    "tests": [
-      "tests/test_codex.py"
-    ],
-    "validation": {
-      "full_regression": "65 passed; 2 third-party deprecation warnings",
-      "real_read": "new and resumed Codex thread read changed random markers successfully",
-      "deployed_gateway": "read desktop file outside project successfully",
-      "limitation": "Windows denied read of a file in system temp; no permission escalation applied"
+  "modules": {
+    "im-gateway": {
+      "title": "网关、模型路由与消息调度",
+      "status": "completed",
+      "design": "design/im-gateway.md",
+      "development": "development/im-gateway.md",
+      "completed": "completed/im-gateway.md",
+      "tests": [
+        "tests/test_gateway.py",
+        "tests/test_dispatch.py",
+        "tests/test_dispatch_queue.py",
+        "tests/test_model_routing.py",
+        "tests/test_decoupling.py",
+        "tests/test_streaming.py",
+        "tests/test_lifecycle.py"
+      ],
+      "historical_validation": [
+        {
+          "source_id": "SPEC-001",
+          "validation": {
+            "full_regression": "64 passed, 2 third-party deprecation warnings",
+            "real_gateway_codex": "gpt-6.1-sol / medium; first snapshot 3.110s; total 5.219s; replay matched",
+            "runtime": "Gateway healthy; Feishu bridge connected; graceful stop verified",
+            "feishu_test_message_sent": false
+          }
+        },
+        {
+          "source_id": "SPEC-003",
+          "validation": {
+            "full_regression": "81 passed; 2 third-party deprecation warnings",
+            "import_isolation": "gateway health endpoint works with Feishu module and SDK imports forbidden",
+            "local_commands": "gateway unavailable and worker saturated tests passed",
+            "auto_fast_path": "zero classification calls for exact standalone greetings; context and failures covered",
+            "runtime": "Gateway healthy; Feishu connected; graceful deployment complete"
+          }
+        },
+        {
+          "source_id": "SPEC-008",
+          "validation": {
+            "full_regression": "121 passed; 2 existing warnings; 9.10s",
+            "deployment": "Gateway health 200; Feishu reconnected; workers 8; session waiting 5; total waiting 100",
+            "scope": "In-memory bridge FIFO and fair scheduling; no persistent crash recovery; direct gateway unchanged"
+          }
+        }
+      ]
     },
-    "superseded_by": "SPEC-004",
-    "reason": "用户明确改为个人 Codex 完整执行权限，保留原只读实现历史"
-  },
-  "SPEC-003": {
-    "status": "completed",
-    "spec": "completed/003-gateway-decoupling-auto-fast-path.md",
-    "tests": [
-      "tests/test_gateway.py",
-      "tests/test_model_routing.py",
-      "tests/test_decoupling.py"
-    ],
-    "validation": {
-      "full_regression": "81 passed; 2 third-party deprecation warnings",
-      "import_isolation": "gateway health endpoint works with Feishu module and SDK imports forbidden",
-      "local_commands": "gateway unavailable and worker saturated tests passed",
-      "auto_fast_path": "zero classification calls for exact standalone greetings; context and failures covered",
-      "runtime": "Gateway healthy; Feishu connected; graceful deployment complete"
-    }
-  },
-  "SPEC-004": {
-    "status": "completed",
-    "spec": "completed/004-personal-codex-full-access-portfolio.md",
-    "tests": [
-      "tests/test_codex.py",
-      "tests/test_gateway.py"
-    ],
-    "supersedes": [
-      "SPEC-002"
-    ],
-    "validation": {
-      "full_regression": "83 passed; 2 third-party deprecation warnings",
-      "legacy_thread": "Explicit developer policy update via thread/inject_items verified in existing read-only thread",
-      "real_execution": "Read input; create and run Python script; update/read/delete scratch file; HTTPS 200; persisted output verified",
-      "deployment": "Gateway-created file verified; Feishu connected",
-      "related_fix": "Close Gateway SQLite connections explicitly; regression covers Windows file handle release",
-      "readme": "Portfolio-oriented README rewritten; no personal absolute paths"
+    "codex-agent": {
+      "title": "Codex 执行与会话",
+      "status": "completed",
+      "design": "design/codex-agent.md",
+      "development": "development/codex-agent.md",
+      "completed": "completed/codex-agent.md",
+      "tests": [
+        "tests/test_codex.py",
+        "tests/test_gateway.py",
+        "tests/test_model_routing.py"
+      ],
+      "historical_validation": [
+        {
+          "source_id": "SPEC-004",
+          "validation": {
+            "full_regression": "83 passed; 2 third-party deprecation warnings",
+            "legacy_thread": "Explicit developer policy update via thread/inject_items verified in existing read-only thread",
+            "real_execution": "Read input; create and run Python script; update/read/delete scratch file; HTTPS 200; persisted output verified",
+            "deployment": "Gateway-created file verified; Feishu connected",
+            "related_fix": "Close Gateway SQLite connections explicitly; regression covers Windows file handle release",
+            "readme": "Portfolio-oriented README rewritten; no personal absolute paths"
+          }
+        }
+      ],
+      "discarded": "discarded/codex-agent.md"
+    },
+    "web-search": {
+      "title": "Tavily 网页搜索与会话开关",
+      "status": "completed",
+      "design": "design/web-search.md",
+      "development": "development/web-search.md",
+      "completed": "completed/web-search.md",
+      "tests": [
+        "tests/test_tavily.py",
+        "tests/test_tavily_switch.py"
+      ],
+      "historical_validation": [
+        {
+          "source_id": "SPEC-006",
+          "validation": {
+            "full_regression": "95 passed; 2 existing warnings; 9.00s",
+            "real_api_tavily": "gemini-3.8-flash; 5 search results; cited final reply; 8.31s",
+            "deployment": "Gateway health 200; real API gateway request completed; Feishu reconnected"
+          }
+        },
+        {
+          "source_id": "SPEC-007",
+          "validation": {
+            "full_regression": "110 passed; 2 existing warnings; 8.94s",
+            "deployment": "Gateway commands verified; health 200; Feishu connected"
+          }
+        }
+      ]
+    },
+    "knowledge-retrieval": {
+      "title": "知识库、混合检索与重排",
+      "status": "completed",
+      "design": "design/knowledge-retrieval.md",
+      "development": "development/knowledge-retrieval.md",
+      "completed": "completed/knowledge-retrieval.md",
+      "tests": [
+        "tests/test_knowledge.py",
+        "tests/test_knowledge_tools.py",
+        "tests/test_rerank.py"
+      ],
+      "historical_validation": [
+        {
+          "source_id": "SPEC-009",
+          "validation": {
+            "full_regression": "146 passed; 2 existing warnings; 9.64s",
+            "index": "6 sections; real text-embedding-3-small; 1536 dimensions; FAISS IndexFlatIP",
+            "sample_top1": "6/6 chapter examples after unified stopwords and lexical RRF tie rule; not general accuracy",
+            "real_api": "search_knowledge called; cited section and match_score; 8.128s",
+            "deployment": "Health 200; knowledge query completed with Tavily disabled; Feishu connected"
+          }
+        },
+        {
+          "source_id": "SPEC-010",
+          "validation": {
+            "full_regression": "160 passed; 2 existing warnings; 9.71s",
+            "rerank": "qwen3-rerank via configured /rerank endpoint; 6/6 chapter sample top1",
+            "deployment": "Gateway health200; API knowledge answer with rerank score; 7.931s; Feishu reconnected"
+          }
+        }
+      ]
     }
   }
 }
